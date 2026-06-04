@@ -11,9 +11,20 @@ def merge_domains_nd(domain_a, min_corner_a, min_corner_b, new_shape):
     canvas_shape = tuple(np.round(max_corner - min_corner).astype(int).tolist())
 
     canvas = np.full(canvas_shape, -1.0)
-    rel    = np.round(min_corner_a - min_corner).astype(int)
-    slices = tuple(slice(int(rel[d]), int(rel[d]) + domain_a.shape[d]) for d in range(domain_a.ndim))
-    canvas[slices] = domain_a
+    rel_a    = np.round(min_corner_a - min_corner).astype(int)
+    slices_a = tuple(slice(int(rel_a[d]), int(rel_a[d]) + domain_a.shape[d]) for d in range(domain_a.ndim))
+    rel_b = np.round(min_corner_b - min_corner).astype(int)
+    slices_b = tuple(slice(int(rel_b[d]), int(rel_b[d]) + new_shape[d]) for d in range(domain_a.ndim))
+
+    # mask points within circular radius about center of domain_b within domain_a
+    center = rel_b + new_shape[0] // 2  # center of domain_b in domain_a coords
+    radius = new_shape[0] // 2
+
+    coords = np.mgrid[slices_b]  # shape (ndim, *new_shape)
+    dist_from_center = np.sqrt(sum((coords[d] - center[d])**2 for d in range(domain_a.ndim)))
+    mask = dist_from_center <= radius
+    canvas[slices_a] = domain_a
+    canvas[slices_b][mask] = 0
 
     return canvas, min_corner
 

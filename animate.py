@@ -101,9 +101,10 @@ def animate_2d(
     heatmaps: list[np.ndarray],
     min_corners: list,
     paths: list,
+    idx: list,
     interval: int = 500,
     fps: int = 10,
-    output_path: str = "forest_3d.gif",):
+    output_path: str = "2d.gif",):
     fig, ax = plt.subplots()
 
     # Initialise image with the final merged shape so the axes are sized correctly
@@ -120,15 +121,17 @@ def animate_2d(
         origin='upper',
     )
     plt.colorbar(im, ax=ax)
-
+    scatter = ax.scatter([], [], c='white', s=10)
     line_object = ax.plot([], [], 'r-')[0]
     pbar = tqdm(total=len(heatmaps), desc='Rendering')
-
+    valid = np.all((idx >= 0) & (idx < np.array(heatmaps[-1].shape)), axis=1)
 
     def update(frame):
         hi, bye = merge_domains_nd(
             heatmaps[frame], min_corners[frame], min_corners[-1], heatmaps[-1].shape
         )
+        scatter.set_offsets(np.column_stack([idx[valid, 1], idx[valid, 0]]))  
+        
 
         # --- image ---
         im.set_data(hi)
@@ -150,8 +153,6 @@ def animate_2d(
 
         # imshow convention: x-axis = columns, y-axis = rows
         line_object.set_data(path[:, 1], path[:, 0])
-
-        pbar.update(1)
         return [im, line_object]
 
 
@@ -163,6 +164,6 @@ def animate_2d(
         blit=False,
     )
 
-    ani.save(output_path, writer='pillow', fps=fps)
+    ani.save(output_path, writer='pillow', fps=fps, progress_callback=lambda i, n: pbar.update(1))
     pbar.close()
     plt.show()

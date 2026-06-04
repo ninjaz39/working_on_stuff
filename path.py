@@ -73,13 +73,12 @@ def check_path(path, new_path, domain, min_corner):
     return curr_heat <= new_heat
 
 
-def filter_paths(path, distance_field, min_corner_field, domain, min_corner_domain):
+def filter_paths(path, distance_field, min_corner_field):
     final_path = [path[-1]]
     final_final_path = [path[-1]]
     curr_heat = 0
-    checking = len(path) - 1
-    total_steps = len(path) - 3
-    while checking>0:
+    checking = len(path) - 2
+    while checking>1:
         checking -= 1
         if curr_heat != -1 and check_intercept(final_path[-1], path[checking], distance_field, min_corner_field):
             final_path.append(path[checking + 1])
@@ -89,6 +88,8 @@ def filter_paths(path, distance_field, min_corner_field, domain, min_corner_doma
     if final_direction_length >= 5:
         final_direction /= final_direction_length
         final_path.append(path[0] + final_direction*5)
+
+
     if len(final_path) > 2:
         for i in range(len(final_path)-1, 0, -1):
             if not check_intercept(final_path[0], final_path[i], distance_field, min_corner_field):
@@ -107,11 +108,12 @@ def check_intercept(start, end, distance_field, min_corner_field):
         return False
     direction /= distance
     next = start.copy()
-    while distance>0:
+    while distance > 0:
         dist_o = dist_to_obstacle(distance_field, min_corner_field, next)
         if dist_o <= 5:
             return True
 
-        next += direction * dist_o
-        distance -= dist_o
+        step = min(dist_o - 5, distance)
+        next += direction * step
+        distance -= step
     return False

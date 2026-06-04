@@ -1,5 +1,5 @@
 import numpy as np
-from wos_solver import WoSolver
+from completed_wos_mapping.wos_solver import WoSolver
 from environment import Domain
 from sampling import sample_ball
 

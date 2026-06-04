@@ -1,6 +1,6 @@
 import numpy as np
 from itertools import product
-from GJK import dist_to_obstacle
+from completed_wos_mapping.GJK import dist_to_obstacle
 
 class Domain:
     def __int__(self, range: np.ndarray, start: np.ndarray, obstacles: np.ndarray):
