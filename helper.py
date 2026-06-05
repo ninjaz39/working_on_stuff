@@ -23,8 +23,15 @@ def merge_domains_nd(domain_a, min_corner_a, min_corner_b, new_shape):
     coords = np.mgrid[slices_b]  # shape (ndim, *new_shape)
     dist_from_center = np.sqrt(sum((coords[d] - center[d])**2 for d in range(domain_a.ndim)))
     mask = dist_from_center <= radius
-    canvas[slices_a] = domain_a
-    canvas[slices_b][mask] = 0
+    full_mask = np.zeros(canvas_shape, dtype=bool)
+    full_mask[slices_b] = mask
+    canvas[full_mask] = 0
+    valid_a = domain_a != -1
+    target = np.zeros(canvas_shape, dtype=bool)
+    target[slices_a] = valid_a
+    canvas[target] = domain_a[valid_a]
+    
+    
 
     return canvas, min_corner
 

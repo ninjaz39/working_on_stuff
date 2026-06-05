@@ -22,29 +22,26 @@ from sampling import sample_ball
     if len(sampled_points)>0:
         start += estimate_gradient(sampled_points, sampled_vals, start, center_value=None, trim_bottom=0) * radius/10'''
 
-def estimate_gradient(points, values, center_point, domain, min_corner, dim, radius, start, n_walks, center_value=None, trim_bottom=0.0):
+def estimate_gradient(center_point, domain, min_corner, dim, radius, n_walks, center_value=None, trim_bottom=0.0):
     sampled_points = []
     sampled_vals = []
     for i in range(n_walks):
-        sample = sample_ball(dim, radius, start)
+        sample = sample_ball(dim, radius, center_point)
         heat_vals = 0
         num_vals = 0
         for i in range(10):
-            samples = get_average_heat(domain, sample_ball(dim, radius, sample) - min_corner, radius = 1)
-            for _, heat in samples:
-                if heat > 0:
-                    heat_vals += heat
-                    num_vals += 1
+            heat_vals = get_average_heat(domain, sample_ball(dim, radius, sample) - min_corner, radius = 1)
+    
 
         if heat_vals>0:   
             sampled_points.append(sample)
-            sampled_vals.append(heat_vals/num_vals)
+            sampled_vals.append(heat_vals)
 
     if len(sampled_points)==0:
-        return start
+        return center_point
     
-    points = np.asarray(points, dtype=float)
-    values = np.asarray(values, dtype=float)
+    points = np.asarray(sampled_points, dtype=float)
+    values = np.asarray(sampled_vals, dtype=float)
     center_point = np.asarray(center_point, dtype=float)
 
     # Remove bottom X% of values
@@ -64,7 +61,7 @@ def estimate_gradient(points, values, center_point, domain, min_corner, dim, rad
         result = np.linalg.lstsq(A_aug, values, rcond=None)[0]
         gradient = result[:-1]
 
-    return start + gradient / np.linalg.norm(gradient) * radius/10
+    return center_point + gradient / np.linalg.norm(gradient) * radius/5
 
 
 def check_path(path, new_path, domain, min_corner):
