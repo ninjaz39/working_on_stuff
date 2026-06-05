@@ -68,27 +68,28 @@ def WoS_altered_g(ego_sphere, distance_field, min_corner_field, goal, start, rad
     dim = len(start)
     max_heat = 0
     final_path = [start.copy()]
-    if radius:
-        radius_g = distance_field[tuple(np.round(goal-min_corner_field).astype(int))]
-        for walk in range(n_walks):
-            first_step = sample_ball(dim, radius-5, start)
-            heat, path = wos_walk_altered_g(radius_g, ego_sphere,  distance_field, min_corner_field, goal, first_step, overall_domain, min_corner, 0)
-            if len(path)>0:
-                if heat > max_heat:
+    radius_g = distance_field[tuple(np.round(goal-min_corner_field).astype(int))]
+    for walk in range(n_walks):
+        first_step = sample_ball(dim, radius, start)
+        heat, path = wos_walk_altered_g(radius_g, ego_sphere,  distance_field, min_corner_field, goal, first_step, overall_domain, min_corner, 0)
+        if len(path)>0:
+            if heat > max_heat:
+                max_heat = heat
+                path.append(start)
+                final_path = path
+            elif heat == max_heat:
+                if len(path) < len(final_path):
                     max_heat = heat
                     path.append(start)
                     final_path = path
-                elif heat == max_heat:
-                    if len(path) < len(final_path):
-                        max_heat = heat
-                        path.append(start)
-                        final_path = path
     print(final_path[0], 'hi')
     return overall_domain, final_path
 
 def ego_centric_wos_mapping(path, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks=1000):
     ego_sphere = EgoSphere(VIEW_RANGE, start, goal)
     radius = min(VIEW_RANGE-5, max(0,dist_to_obstacle(distance_field, min_corner_field, start)-5))
+    if not radius:
+        return domain, None, []
     
     domain, new_path = WoS_altered_g(ego_sphere, distance_field, min_corner_field, goal, start, radius, n_walks, domain, min_corner)
     
@@ -131,6 +132,9 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
         domain, min_corner = merge_domains_nd(domain, min_corner, new_min_corner, tuple([domain_size]*dim))
 
         solved_domain, start, krr = ego_centric_wos_mapping(krr, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
+        if type(start) == type(None):
+            start = path[-2]
+            krr = [path[-2]]
         path.append(start.copy())
         dist_g = np.linalg.norm(start-goal)
         '''idx = np.argwhere(domain == -1)

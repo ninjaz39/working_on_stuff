@@ -127,19 +127,15 @@ def animate_2d(
     valid = np.all((idx >= 0) & (idx < np.array(heatmaps[-1].shape)), axis=1)
 
     def update(frame):
-        hi, bye = merge_domains_nd(
-            heatmaps[frame], min_corners[frame], min_corners[-1], heatmaps[-1].shape
-        )
+        hi = np.full(heatmaps[-1].shape, np.nan)
         
+        domain_mask = np.zeros(hi.shape, dtype=bool)
+        rel_a = np.round(np.array(min_corners[frame]) - min_corners[-1]).astype(int)
+        slices_a = tuple(slice(int(rel_a[d]), int(rel_a[d]) + heatmaps[frame].shape[d]) for d in range(hi.ndim))
+        
+        hi[slices_a] = heatmaps[frame] # outside domain → nan
         hi[idx[valid, 0], idx[valid, 1]] = np.nan
         hi[(hi == -1)] = np.nan
-        domain_mask = np.zeros(hi.shape, dtype=bool)
-        rel_a = np.round(np.array(min_corners[frame]) - bye).astype(int)
-        rel_a = np.maximum(rel_a, 0)
-        slices_a = tuple(slice(int(rel_a[d]), int(rel_a[d]) + heatmaps[frame].shape[d]) for d in range(hi.ndim))
-        domain_mask[slices_a] = True
-
-        hi[~domain_mask] = np.nan  # outside domain → nan
 
         
 
@@ -159,7 +155,7 @@ def animate_2d(
         # --- path ---
         # Shift path coordinates into the merged array's local frame.
         # `bye` must be [row, col] order to match `paths`.
-        path = np.array(paths[: frame + 2]).copy() - bye
+        path = np.array(paths[: frame + 2]).copy() - min_corners[-1]
 
         # imshow convention: x-axis = columns, y-axis = rows
         line_object.set_data(path[:, 1], path[:, 0])

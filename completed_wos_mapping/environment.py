@@ -3,12 +3,12 @@ from itertools import product
 from completed_wos_mapping.GJK import dist_to_obstacle
 
 class Domain:
-    def __int__(self, range: np.ndarray, start: np.ndarray, obstacles: np.ndarray):
-        self.range = range
+    def __int__(self, range: int, start: np.ndarray, obstacles: np.ndarray):
         self.dim = len(start)
+        self.range = [range] * self.dim
         self.start = start
         self.obstacles = obstacles
-        domain_size = range*2 + 1
+        domain_size = [range*2 + 1] * self.dim
         self.heat_domain = np.zeros(shape=domain_size)
         self.distance_field = np.zeros(shape=domain_size)
         self.compute_distance_field()
@@ -25,15 +25,39 @@ class Domain:
 
         new_distance_field = np.full(canvas_shape, -1.0)
         new_heat_domain = np.zeros(canvas_shape)
-        rel    = np.round(self.min_corner - min_corner).astype(int)
-        slices_old = tuple(slice(int(rel[d]), int(rel[d]) + self.domain.shape[d]) for d in range(self.dim))
+
+        rel_old    = np.round(self.min_corner - min_corner).astype(int)
+        slices_old = tuple(slice(int(rel_old[d]), int(rel_old[d]) + self.domain.shape[d]) for d in range(self.dim))
+
+        rel_b = np.round(min_corner_b - min_corner).astype(int)
+        slices_b = tuple(slice(int(rel_b[d]), int(rel_b[d]) + canvas_shape[d]) for d in range(self.dim))
+
+        center = rel_b + new_shape[0] // 2  # center of domain_b in domain_a coords
+        radius = new_shape[0] // 2
+
+        coords = np.mgrid[slices_b]  # shape (ndim, *new_shape)
+        dist_from_center = np.sqrt(sum((coords[d] - center[d])**2 for d in range(self.dim)))
+        mask = dist_from_center <= radius
+        full_mask = np.zeros(canvas_shape, dtype=bool)
+        full_mask[slices_b] = mask
+
         new_distance_field[slices_old] = self.distance_field
         self.distance_field = new_distance_field
+
         new_indices = np.argwhere(new_distance_field == -1.0)
+
         self.min_corner = min_corner
-        new_heat_domain[slices_old] = self.heat_domain
+
+        valid_old = self.heat_domain != -1
+        target = np.zeros(canvas_shape, dtype=bool)
+        target[slices_old] = valid_old
+        new_heat_domain[target] = self.heat_domain[valid_old]
+        new_heat_domain[full_mask] = 0
         self.heat_domain = new_heat_domain
+
         self.update_new_regions(new_indices)
+
+        
 
     def compute_distance_field(self, idx = None):
         if type(idx) == type(None):

@@ -8,12 +8,13 @@ class WalkOnGoal:
         self.start = start
         self.goal = goal
         self.path_walked = [start.copy()]
-        self.forward_path = []
+        self.forward_path = [start.copy()]
         self.radius_g = way_point_acceptance_radius
         self.domain = Domain(range, start, obstacles)
-        self.solver = WoSolver(0.5, 1000, self.dim, 10)
+        self.n_walks = 10
+        self.solver = WoSolver(0.5, 1000, avoidance_distance, self.dim, self.n_walks)
         self.avoidance_distance = avoidance_distance
-
+    
 
 
     def add_obstacle(self, new_obstacles:np.ndarray):
@@ -25,52 +26,57 @@ class WalkOnGoal:
         dist_g = np.ceil(np.linalg.norm(self.start-self.goal)).astype(int)
 
         while dist_g>self.radius_g:
-            radius = self.distance_field.closest_obstacle(self.start)
-            unfiltered_path = self.solver.solve_domain(self.domain, self.start, self.goal, radius, self.radius_g)
-            next = self.compute_path(unfiltered_path)
-            if type(next) != type(None):
-                self.start = next
-                self.path_walked.append(self.start.copy())
-                self.domain.expand_domain(self.start)
-                dist_g = np.ceil(np.linalg.norm(self.start-self.goal)).astype(int)
+            radius = min(self.range -5, max(0, self.distance_field.closest_obstacle(self.start) - 5))
+            if radius == 0:
+                self.start = self.path_walked[-2]
+                self.forward_path = [start.copy()]
+            else:
+                unfiltered_path = self.solver.solve_domain(self.domain, self.start, self.goal, radius, self.radius_g)
+                self.start = self.compute_path(unfiltered_path, radius)
+                 self.domain.expand_domain(self.start)
+
+            self.path_walked.append(self.start.copy())
+            dist_g = np.ceil(np.linalg.norm(self.start-self.goal)).astype(int)
 
         return True
 
 
 
-    def compute_path(self, unfiltered_path):
+    def compute_path(self, unfiltered_path, radius):
         if len(unfiltered_path)>1 and self.check_path(unfiltered_path):
                 unfiltered_path = self.filter_paths(unfiltered_path)
                 self.forward_path = unfiltered_path
         if len(self.forward_path) < 2:
-            return None
-        if len(self.forward_path) < 3:
-            self.forward_path[0] = self.forward_path[0] + (self.forward_path[1] - self.forward_path[0])/2
+            next =  compute_gradient_ascent(self, radius)
+            if self.domain.closest_obstacle(next) > 5:
+                self.forward_path = np.array([next])
+                return next
+            else:
+                return start
+        next_step = self.forward_path[1] - self.forward_path[0]
+        next_distance = np.linalg.norm(next_step)
+        if next_distance > radius:
+            path[0] = self.forward_path[0] + next_step/next_distance * radius
             return self.forward_path[0]
-        
-        self.forward_path = self.forward_path[1:]
-        return self.forward_path[1]
-    
+        else:
+            self.forward_path = self.forward_path[1:]
+            return self.forward_path[1]
 
 
 
-    def compute_gradient_ascent(self, dim, radius, start, n_walks, trim_bottom=0.0):
+    def compute_gradient_ascent(self, radius, trim_bottom=0.0):
         sampled_points = []
         sampled_vals = []
-        for i in range(n_walks):
-            sample = sample_ball(dim, radius, start)
+        for i in range(self.n_walks):
+            sample = sample_ball(self.dim, radius, self.start)
             heat_vals = 0
             num_vals = 0
             for i in range(10):
-                samples = self.domain.get_heat(sample_ball(dim, radius, sample))
-                for _, heat in samples:
-                    if heat > 0:
-                        heat_vals += heat
-                        num_vals += 1
+                heat_vals = self.domain.get_heat(sample_ball(self.dim, radius, sample))
 
             if heat_vals>0:   
                 sampled_points.append(sample)
-                sampled_vals.append(heat_vals/num_vals)
+                sampled_vals.append(heat_vals)
 
         if len(sampled_points)==0:
             return start
