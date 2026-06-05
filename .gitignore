@@ -1,3 +1,10 @@
 obstacle_fields/moving_rectangle 
 obstacle_fields/obstacles_3d 
-__pycache__
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+build/
+dist/
+*.egg-info/
