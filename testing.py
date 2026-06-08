@@ -21,7 +21,7 @@ def load_ndarray(name: str) -> np.ndarray:
     return np.array(flat).reshape(shape)
 
 def wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, start, overall_domain, min_corner, curr_rec):
-    if curr_rec == 500:
+    if curr_rec == 800:
         return 0, []
     adjusted_start = start-min_corner
     dist_g = np.linalg.norm(start-goal)
@@ -82,7 +82,7 @@ def WoS_altered_g(distance_field, min_corner_field, goal, start, radius, n_walks
     print(final_path[0], 'hi')
     return overall_domain, final_path, max_heat
 
-def ego_centric_wos_mapping(max_heat,path, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks=1000):
+def ego_centric_wos_mapping(path, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks=1000):
     radius = min(VIEW_RANGE-5, max(0,dist_to_obstacle(distance_field, min_corner_field, start)-5))
     if not radius:
         return domain, None, []
@@ -91,24 +91,23 @@ def ego_centric_wos_mapping(max_heat,path, domain, min_corner, start, goal, dist
     
     if len(new_path)>1 and check_path(path, temp_heat, domain, min_corner):
         new_path = filter_paths(new_path, distance_field, min_corner_field)
-        max_heat = temp_heat
         path = new_path
              
 
-    if len(path) < 2 or get_average_heat(domain, path[-1]-min_corner) < max_heat/2:
+    if len(path) < 2 or get_average_heat(domain, path[-1]-min_corner) < get_average_heat(domain, start-min_corner):
         next =  estimate_gradient(start, domain, min_corner, dim, radius, n_walks)
         if dist_to_obstacle(distance_field, min_corner_field, next) > 5.0:
-            return domain, next, np.array([next]), 0
+            return domain, next, np.array([next])
         else:
-            return domain, None, None, 0
+            return domain, None, None
     
     next_step = path[1] - path[0]
     next_distance = np.linalg.norm(next_step)
     if next_distance > radius/10:
         path[0] = path[0] + (path[1] - path[0])/np.linalg.norm(path[1] - path[0])
-        return domain, path[0], path, max_heat
+        return domain, path[0], path
     else:
-        return domain, path[1], path[1:], max_heat
+        return domain, path[1], path[1:]
     
 
 def path_mapping(start, goal, distance_field, min_corner_field, direction=None, n_walks=1000):
@@ -130,7 +129,7 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
         new_min_corner = start - np.array([VIEW_RANGE]*dim)
         domain, min_corner = merge_domains_nd(domain, min_corner, new_min_corner, tuple([domain_size]*dim))
 
-        solved_domain, start, krr, max_heat = ego_centric_wos_mapping(max_heat, krr, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
+        solved_domain, start, krr = ego_centric_wos_mapping(krr, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
         if type(start) == type(None):
             start = path[-2]
             krr = [path[-2]]

@@ -32,7 +32,6 @@ def estimate_gradient(center_point, domain, min_corner, dim, radius, n_walks, ce
         for i in range(10):
             heat_vals = get_average_heat(domain, sample_ball(dim, radius, sample) - min_corner, radius = 1)
     
-
         if heat_vals>0:   
             sampled_points.append(sample)
             sampled_vals.append(heat_vals)
