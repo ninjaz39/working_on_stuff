@@ -20,19 +20,19 @@ def load_ndarray(name: str) -> np.ndarray:
 
     return np.array(flat).reshape(shape)
 
-def wos_walk_altered_g(radius_g, ego_sphere, distance_field, min_corner_field, goal, start, overall_domain, min_corner, curr_rec):
+def wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, start, overall_domain, min_corner, curr_rec):
     if curr_rec == 500:
         return 0, []
     adjusted_start = start-min_corner
     dist_g = np.linalg.norm(start-goal)
     if dist_g < radius_g:
-        point = (ego_sphere.g(dist_g)*100000000)
+        point = (1/dist_g*100000000)
         update_neighbors(overall_domain, adjusted_start, point)
         return point, [start]
     
     dist_b = dist_to_edge(adjusted_start, overall_domain)
     obstacle_hit = False
-    dist_o = dist_to_obstacle(distance_field, min_corner_field, start, 2)
+    dist_o = dist_to_obstacle(distance_field, min_corner_field, start, 0.9999)
 
     if dist_o == None:
         return 0, []
@@ -46,16 +46,13 @@ def wos_walk_altered_g(radius_g, ego_sphere, distance_field, min_corner_field, g
     
     if (not obstacle_hit and dist_b<EPSILON) or dist_to_obstacle(overall_domain, min_corner, start)<0:
 
-        point = (ego_sphere.g(dist_g)*100000000)
-        if dist_to_obstacle(overall_domain, min_corner, start)<0:
-            return point, []
-        update_neighbors(overall_domain, adjusted_start, point)
-        return point, [start]
+        point = (1/dist_g*100000000) 
+        return point, []
     
     point = None
     while point == None:
-        v = sample_sphere(ego_sphere.dim, dist_b, start)
-        point, next_steps = wos_walk_altered_g(radius_g, ego_sphere, distance_field, min_corner_field, goal, v, overall_domain, min_corner, curr_rec+1)
+        v = sample_sphere(dim, dist_b, start)
+        point, next_steps = wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, v, overall_domain, min_corner, curr_rec+1)
 
     update_neighbors(overall_domain, adjusted_start, point)
     if point <= 0:
@@ -64,14 +61,14 @@ def wos_walk_altered_g(radius_g, ego_sphere, distance_field, min_corner_field, g
     next_steps.append(start)
     return point, next_steps
 
-def WoS_altered_g(ego_sphere, distance_field, min_corner_field, goal, start, radius, n_walks, overall_domain, min_corner):
+def WoS_altered_g(distance_field, min_corner_field, goal, start, radius, n_walks, overall_domain, min_corner):
     dim = len(start)
     max_heat = 0
     final_path = [start.copy()]
     radius_g = distance_field[tuple(np.round(goal-min_corner_field).astype(int))]
     for walk in range(n_walks):
         first_step = sample_ball(dim, radius, start)
-        heat, path = wos_walk_altered_g(radius_g, ego_sphere,  distance_field, min_corner_field, goal, first_step, overall_domain, min_corner, 0)
+        heat, path = wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, first_step, overall_domain, min_corner, 0)
         if len(path)>0:
             if heat > max_heat:
                 max_heat = heat
@@ -83,34 +80,35 @@ def WoS_altered_g(ego_sphere, distance_field, min_corner_field, goal, start, rad
                     path.append(start)
                     final_path = path
     print(final_path[0], 'hi')
-    return overall_domain, final_path
+    return overall_domain, final_path, max_heat
 
-def ego_centric_wos_mapping(path, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks=1000):
-    ego_sphere = EgoSphere(VIEW_RANGE, start, goal)
+def ego_centric_wos_mapping(max_heat,path, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks=1000):
     radius = min(VIEW_RANGE-5, max(0,dist_to_obstacle(distance_field, min_corner_field, start)-5))
     if not radius:
         return domain, None, []
     
-    domain, new_path = WoS_altered_g(ego_sphere, distance_field, min_corner_field, goal, start, radius, n_walks, domain, min_corner)
+    domain, new_path, temp_heat = WoS_altered_g(distance_field, min_corner_field, goal, start, radius, n_walks, domain, min_corner)
     
-    if len(new_path)>1 and check_path(path, new_path, domain, min_corner):
+    if len(new_path)>1 and check_path(path, temp_heat, domain, min_corner):
         new_path = filter_paths(new_path, distance_field, min_corner_field)
+        max_heat = temp_heat
         path = new_path
+             
 
-    if len(path) < 2:
+    if len(path) < 2 or get_average_heat(domain, path[-1]-min_corner) < max_heat/2:
         next =  estimate_gradient(start, domain, min_corner, dim, radius, n_walks)
-        if dist_to_obstacle(distance_field, min_corner_field, next) > 5:
-            return domain, next, np.array([next])
+        if dist_to_obstacle(distance_field, min_corner_field, next) > 5.0:
+            return domain, next, np.array([next]), 0
         else:
-            return domain, start, path
+            return domain, None, None, 0
     
     next_step = path[1] - path[0]
     next_distance = np.linalg.norm(next_step)
-    if next_distance > radius:
-        path[0] = path[0] + (path[1] - path[0])/np.linalg.norm(path[1] - path[0]) * radius
-        return domain, path[0], path
+    if next_distance > radius/10:
+        path[0] = path[0] + (path[1] - path[0])/np.linalg.norm(path[1] - path[0])
+        return domain, path[0], path, max_heat
     else:
-        return domain, path[1], path[1:]
+        return domain, path[1], path[1:], max_heat
     
 
 def path_mapping(start, goal, distance_field, min_corner_field, direction=None, n_walks=1000):
@@ -124,6 +122,7 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
     min_corners = []
     domain_size = VIEW_RANGE * 2 + 1
     count = 0
+    max_heat = 0
 
     while dist_g>distance_field[tuple(np.round(goal-min_corner_field).astype(int))]:
         print(start)
@@ -131,7 +130,7 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
         new_min_corner = start - np.array([VIEW_RANGE]*dim)
         domain, min_corner = merge_domains_nd(domain, min_corner, new_min_corner, tuple([domain_size]*dim))
 
-        solved_domain, start, krr = ego_centric_wos_mapping(krr, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
+        solved_domain, start, krr, max_heat = ego_centric_wos_mapping(max_heat, krr, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
         if type(start) == type(None):
             start = path[-2]
             krr = [path[-2]]
@@ -146,7 +145,7 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
         plt.plot(*(hi-min_corner).T[::-1], 'w-')
         plt.plot(*(temp-min_corner).T[::-1], 'r-')
         plt.show(block=False)
-        plt.pause(0.001)
+        plt.pause(0.01)
         plt.close()'''
         
         heatmaps.append(solved_domain)
@@ -159,7 +158,7 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
 start = np.array([750.0, 50.0])
 goal = np.array([250.0, 950.0])
 dim = len(start)
-distance_field = load_ndarray(r'C:\Users\chuen\Desktop\working_on_stuff\obstacle_fields\forest_2d')
+distance_field = load_ndarray('/Users/TWengChu/Desktop/wos_v2/obstacle_fields/forest_2d')
 min_corner_field = np.array([0,0])
 direction = np.array([0, -1])
 
@@ -170,4 +169,5 @@ animate_2d(
     min_corners,
     paths,
     idx,
-    output_path = "2ddddd.gif",)
+    fps=100,
+    output_path = "kyak.mp4",)

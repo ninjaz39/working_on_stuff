@@ -8,7 +8,7 @@ def merge_domains_nd(domain_a, min_corner_a, min_corner_b, new_shape):
 
     min_corner   = np.minimum(min_corner_a, min_corner_b)
     max_corner   = np.maximum(min_corner_a + np.array(domain_a.shape), min_corner_b + np.array(new_shape))
-    canvas_shape = tuple(np.round(max_corner - min_corner).astype(int).tolist())
+    canvas_shape = tuple(np.ceil(max_corner - min_corner).astype(int).tolist())
 
     canvas = np.full(canvas_shape, -1.0)
     rel_a    = np.round(min_corner_a - min_corner).astype(int)
@@ -126,7 +126,10 @@ def dist_to_edge(point, array):
 def dist_to_obstacle(distance_field, min_corner_field, start, radius = 1):
     dist_b = float('inf')
     dist_o = get_neighbors(distance_field, start-min_corner_field, radius)
-    for _, i in dist_o:
-        if i < dist_b:
-            dist_b = i
-    return dist_b
+    if len(dist_o)>0:
+        for _, i in dist_o:
+            if i < dist_b:
+                dist_b = i
+
+        return dist_b
+    return 0

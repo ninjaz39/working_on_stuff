@@ -60,13 +60,14 @@ def estimate_gradient(center_point, domain, min_corner, dim, radius, n_walks, ce
         A_aug = np.hstack([A, np.ones((len(A), 1))])
         result = np.linalg.lstsq(A_aug, values, rcond=None)[0]
         gradient = result[:-1]
+    if np.linalg.norm(gradient):
+        return center_point + gradient / np.linalg.norm(gradient)# * radius/5
+    else:
+        return center_point
 
-    return center_point + gradient / np.linalg.norm(gradient) * radius/5
 
-
-def check_path(path, new_path, domain, min_corner):
+def check_path(path, new_heat, domain, min_corner):
     curr_heat = get_average_heat(domain, path[-1]-min_corner, 3)
-    new_heat = get_average_heat(domain, new_path[-1]-min_corner, 3)
     return curr_heat <= new_heat
 
 

@@ -102,13 +102,13 @@ def animate_2d(
     min_corners: list,
     paths: list,
     idx: list,
-    interval: int = 500,
-    fps: int = 10,
-    output_path: str = "2d.gif",):
+    fps: int = 100,
+    output_path: str = "2d.mp4",):
+
+    import imageio
+
     fig, ax = plt.subplots()
 
-    # Initialise image with the final merged shape so the axes are sized correctly
-    # from the start — this prevents imshow from locking in a stale extent on frame 0.
     initial_hi, _ = merge_domains_nd(
         heatmaps[0], min_corners[0], min_corners[-1], heatmaps[-1].shape
     )
@@ -117,59 +117,46 @@ def animate_2d(
         initial_hi,
         cmap='inferno',
         animated=True,
-        extent=[0, initial_hi.shape[1], initial_hi.shape[0], 0],  # [l, r, b, t]
+        extent=[0, initial_hi.shape[1], initial_hi.shape[0], 0],
         origin='upper',
     )
     plt.colorbar(im, ax=ax)
     scatter = ax.scatter([], [], c='white', s=10)
     line_object = ax.plot([], [], 'r-')[0]
-    pbar = tqdm(total=len(heatmaps), desc='Rendering')
     valid = np.all((idx >= 0) & (idx < np.array(heatmaps[-1].shape)), axis=1)
 
     def update(frame):
         hi = np.full(heatmaps[-1].shape, np.nan)
-        
-        domain_mask = np.zeros(hi.shape, dtype=bool)
+
         rel_a = np.round(np.array(min_corners[frame]) - min_corners[-1]).astype(int)
         slices_a = tuple(slice(int(rel_a[d]), int(rel_a[d]) + heatmaps[frame].shape[d]) for d in range(hi.ndim))
-        
-        hi[slices_a] = heatmaps[frame] # outside domain → nan
+
+        hi[slices_a] = heatmaps[frame]
         hi[idx[valid, 0], idx[valid, 1]] = np.nan
         hi[(hi == -1)] = np.nan
 
-        
-
-        # --- image ---
         im.set_data(hi)
-
-        # Update the extent so every pixel in `hi` maps to exactly 1 data unit.
-        # Without this the image is stretched/squashed whenever the merged shape grows.
-        im.set_extent([0, hi.shape[1], hi.shape[0], 0])  # [left, right, bottom, top]
-
-        # Keep axes limits in sync with the (possibly growing) image.
+        im.set_extent([0, hi.shape[1], hi.shape[0], 0])
         ax.set_xlim(0, hi.shape[1])
-        ax.set_ylim(hi.shape[0], 0)   # inverted: row 0 at top, matching origin='upper'
-
+        ax.set_ylim(hi.shape[0], 0)
         ax.set_title(f'Frame {frame + 1} / {len(heatmaps)}')
 
-        # --- path ---
-        # Shift path coordinates into the merged array's local frame.
-        # `bye` must be [row, col] order to match `paths`.
         path = np.array(paths[: frame + 2]).copy() - min_corners[-1]
-
-        # imshow convention: x-axis = columns, y-axis = rows
         line_object.set_data(path[:, 1], path[:, 0])
-        return [im, line_object]
 
+    # --- render frames manually with imageio ---
+    pbar = tqdm(total=len(heatmaps), desc='Rendering')
+    writer = imageio.get_writer(output_path, fps=fps)
 
-    ani = animation.FuncAnimation(
-        fig,
-        update,
-        frames=len(heatmaps),
-        interval=interval,
-        blit=False,
-    )
+    for i in range(len(heatmaps)):
+        update(i)
+        fig.canvas.draw()
+        buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8)
+        buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+        buf = buf[:, :, 1:]  # ARGB → RGB
+        writer.append_data(buf)
+        pbar.update(1)
 
-    ani.save(output_path, writer='pillow', fps=fps, progress_callback=lambda i, n: pbar.update(1))
+    writer.close()
     pbar.close()
     plt.show()
