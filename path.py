@@ -27,10 +27,7 @@ def estimate_gradient(center_point, domain, min_corner, dim, radius, n_walks, ce
     sampled_vals = []
     for i in range(n_walks):
         sample = sample_ball(dim, radius, center_point)
-        heat_vals = 0
-        num_vals = 0
-        for i in range(10):
-            heat_vals = get_average_heat(domain, sample_ball(dim, radius, sample) - min_corner, radius = 1)
+        heat_vals = get_average_heat(domain, sample - min_corner, radius = radius/5)
     
         if heat_vals>0:   
             sampled_points.append(sample)
@@ -114,3 +111,20 @@ def check_intercept(start, end, distance_field, min_corner_field):
         next += direction * step
         distance -= step
     return False
+
+
+def velocity_path(start, min_corner, radius, domain, n_walks):
+    possible_waypoints = []
+    curr_heat = get_average_heat(domain, start-min_corner, radius/5)
+    for i in range(n_walks):
+        sample = sample_ball(len(start), radius, start)
+        sample_heat = get_average_heat(domain, sample-min_corner, radius/5)
+        if sample_heat > curr_heat:
+            possible_waypoints.append([sample_heat, sample.copy()])
+        
+
+    possible_waypoints = sorted(possible_waypoints, key=lambda x: x[0])
+    if len(possible_waypoints) > 0:
+        possible_waypoints = [i[1] for i in possible_waypoints]
+
+    return possible_waypoints

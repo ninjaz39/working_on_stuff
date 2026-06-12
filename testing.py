@@ -5,6 +5,7 @@ from helper import merge_domains_nd, update_neighbors, get_neighbors, dist_to_ed
 from shapes import EgoSphere
 from path import filter_paths, check_path, check_intercept, estimate_gradient
 from animate import animate_2d
+from matplotlib.colors import LinearSegmentedColormap
 
 
 VIEW_RANGE = 100
@@ -21,7 +22,7 @@ def load_ndarray(name: str) -> np.ndarray:
     return np.array(flat).reshape(shape)
 
 def wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, start, overall_domain, min_corner, curr_rec):
-    if curr_rec == 800:
+    if curr_rec == 200:
         return 0, []
     adjusted_start = start-min_corner
     dist_g = np.linalg.norm(start-goal)
@@ -61,10 +62,9 @@ def wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, st
     next_steps.append(start)
     return point, next_steps
 
-def WoS_altered_g(distance_field, min_corner_field, goal, start, radius, n_walks, overall_domain, min_corner):
+def WoS_altered_g(max_heat, distance_field, min_corner_field, goal, start, radius, n_walks, overall_domain, min_corner):
     dim = len(start)
-    max_heat = 0
-    final_path = [start.copy()]
+    final_path = []
     radius_g = distance_field[tuple(np.round(goal-min_corner_field).astype(int))]
     for walk in range(n_walks):
         first_step = sample_ball(dim, radius, start)
@@ -74,40 +74,43 @@ def WoS_altered_g(distance_field, min_corner_field, goal, start, radius, n_walks
                 max_heat = heat
                 path.append(start)
                 final_path = path
-            elif heat == max_heat:
-                if len(path) < len(final_path):
-                    max_heat = heat
-                    path.append(start)
-                    final_path = path
-    print(final_path[0], 'hi')
+    if len(final_path):
+        print(start, final_path[-1], 'hi')
     return overall_domain, final_path, max_heat
 
-def ego_centric_wos_mapping(path, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks=1000):
+def ego_centric_wos_mapping(max_heat, path, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks=1000):
     radius = min(VIEW_RANGE-5, max(0,dist_to_obstacle(distance_field, min_corner_field, start)-5))
     if not radius:
-        return domain, None, []
+        return domain, None, [], 0
     
-    domain, new_path, temp_heat = WoS_altered_g(distance_field, min_corner_field, goal, start, radius, n_walks, domain, min_corner)
+    domain, new_path, max_heat = WoS_altered_g(max_heat, distance_field, min_corner_field, goal, start, radius, n_walks, domain, min_corner)
     
-    if len(new_path)>1 and check_path(path, temp_heat, domain, min_corner):
-        new_path = filter_paths(new_path, distance_field, min_corner_field)
-        path = new_path
-             
+    if len(new_path)>1:
+        path = filter_paths(new_path, distance_field, min_corner_field)
 
-    if len(path) < 2 or get_average_heat(domain, path[-1]-min_corner) < get_average_heat(domain, start-min_corner):
+    if len(path) < 2 or max_heat > 3*get_average_heat(domain, path[-1]-min_corner):
+        if len(path) > 1:
+            print('nop')
+            for i in path[1:]:
+                domain, new_path, max_heat = WoS_altered_g(max_heat, distance_field, min_corner_field, goal, i, min(VIEW_RANGE-5, max(0,dist_to_obstacle(distance_field, min_corner_field, i)-5)), n_walks, domain, min_corner)
+                if len(new_path)>1:
+                    new_path.extend(path[::-1])
+                    path = filter_paths(new_path, distance_field, min_corner_field)
+                    return domain, path[0], path, max_heat
+                
         next =  estimate_gradient(start, domain, min_corner, dim, radius, n_walks)
         if dist_to_obstacle(distance_field, min_corner_field, next) > 5.0:
-            return domain, next, np.array([next])
+            return domain, next, np.array([next]), 0
         else:
-            return domain, None, None
+            return domain, None, None, 0
     
     next_step = path[1] - path[0]
     next_distance = np.linalg.norm(next_step)
     if next_distance > radius/10:
         path[0] = path[0] + (path[1] - path[0])/np.linalg.norm(path[1] - path[0])
-        return domain, path[0], path
+        return domain, path[0], path, max_heat
     else:
-        return domain, path[1], path[1:]
+        return domain, path[1], path[1:], max_heat
     
 
 def path_mapping(start, goal, distance_field, min_corner_field, direction=None, n_walks=1000):
@@ -129,23 +132,29 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
         new_min_corner = start - np.array([VIEW_RANGE]*dim)
         domain, min_corner = merge_domains_nd(domain, min_corner, new_min_corner, tuple([domain_size]*dim))
 
-        solved_domain, start, krr = ego_centric_wos_mapping(krr, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
+        solved_domain, start, krr, max_heat = ego_centric_wos_mapping(max_heat, krr, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
         if type(start) == type(None):
             start = path[-2]
             krr = [path[-2]]
         path.append(start.copy())
         dist_g = np.linalg.norm(start-goal)
-        '''idx = np.argwhere(domain == -1)
-        plt.scatter(idx[:, 1], idx[:, 0], c='w')
-        temp = np.array(path)
-        hi = np.array(krr)
-        #plot_heatmap_3d(solved_domain, temp-min_corner)
-        plt.imshow(solved_domain, cmap='inferno')
-        plt.plot(*(hi-min_corner).T[::-1], 'w-')
-        plt.plot(*(temp-min_corner).T[::-1], 'r-')
-        plt.show(block=False)
-        plt.pause(0.01)
-        plt.close()'''
+        '''if max_heat == 0 and start[1]>150 and start[0]<110:
+            idx = np.argwhere(domain == -1)
+            plt.scatter(idx[:, 1], idx[:, 0], c='w')
+            temp = np.array(path)
+            hi = np.array(krr)
+            #plot_heatmap_3d(solved_domain, temp-min_corner)
+            cmap = LinearSegmentedColormap.from_list(
+                "heat",
+                ["#000033", "#0000ff", "#00ffff", "#ffff00", "#ff4400", "#ffffff"],
+            )
+            plt.imshow(solved_domain, cmap=cmap)
+            plt.plot(*(hi-min_corner).T[::-1], 'w-')
+            plt.plot(*(temp-min_corner).T[::-1], 'r-')
+            plt.show(block=False)
+            plt.pause(0.001)
+            plt.close()'''
+
         
         heatmaps.append(solved_domain)
         min_corners.append(min_corner)
@@ -161,7 +170,7 @@ distance_field = load_ndarray('/Users/TWengChu/Desktop/wos_v2/obstacle_fields/fo
 min_corner_field = np.array([0,0])
 direction = np.array([0, -1])
 
-heatmaps, paths, min_corners = path_mapping(start, goal, distance_field, min_corner_field, n_walks=10)
+heatmaps, paths, min_corners = path_mapping(start, goal, distance_field, min_corner_field, n_walks=100)
 idx = (np.argwhere(distance_field <= 0) + min_corner_field - min_corners[-1]).astype(int) 
 animate_2d(
     heatmaps,
