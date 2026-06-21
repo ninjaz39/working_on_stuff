@@ -66,3 +66,10 @@ class EgoSphere(Sphere):
 
     def g(self, radius):
         return (1/(radius))
+    
+
+def support_vec(shape1, shape2, d):
+    """
+    Support point of Minkowski difference A - B
+    """
+    return (shape1.support(d) - shape2.support(-d))

@@ -30,8 +30,6 @@ def merge_domains_nd(domain_a, min_corner_a, min_corner_b, new_shape):
     target = np.zeros(canvas_shape, dtype=bool)
     target[slices_a] = valid_a
     canvas[target] = domain_a[valid_a]
-    
-    
 
     return canvas, min_corner
 
@@ -133,3 +131,37 @@ def dist_to_obstacle(distance_field, min_corner_field, start, radius = 1):
 
         return dist_b
     return 0
+
+def update_neighbors_1(array, N, v,radius = 1):
+    if len(array)<=1:
+        return 0
+    """
+    Retrieve values of all integer grid nodes within radius 1 of floating point position N.
+
+    Args:
+        array: n-dimensional numpy array of shape (d, d, ..., d)
+        N:     array-like of n floats, the fractional position
+
+    Returns:
+        List of (index_tuple, value) pairs for all nodes within radius 1
+    """
+    N = np.asarray(N, dtype=float)
+    shape = array.shape
+
+    ranges = []
+    for i, coord in enumerate(N):
+        lo = int(np.ceil(coord-radius))
+        hi = int(np.floor(coord+radius))
+        ranges.append(range(max(0, lo), min(shape[i], hi + 1)))
+
+    results = []
+    for idx in product(*ranges):
+        idx_arr = np.array(idx)
+        if np.linalg.norm(idx_arr - N) <= radius:
+            heat = array[tuple(idx)]
+            if heat:
+                array[tuple(idx)] = (heat + v)
+            else:
+                array[tuple(idx)] = v
+
+    return results

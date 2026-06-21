@@ -74,7 +74,7 @@ def wos_walk_altered_g(velocity, gradient, original, radius_g, dim, distance_fie
 def WoS_altered_g(velocity, gradient, original, max_heat, distance_field, min_corner_field, goal, start, radius, n_walks, overall_domain, min_corner):
     dim = len(start)
     final_path = []
-    radius_g = distance_field[tuple(np.round(goal-min_corner_field).astype(int))]
+    radius_g = distance_field[tuple(np.round(goal-min_corner_field).astype(int))]/2
     for walk in range(n_walks):
         first_step = sample_ball(dim, 100, start)
         heat, path = wos_walk_altered_g(velocity, gradient, original, radius_g, dim, distance_field, min_corner_field, goal, first_step, overall_domain, min_corner, 0)
@@ -165,8 +165,8 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
         path.append(start.copy())
         dist_g = np.linalg.norm(start-goal)
         if count%100==0:
-            idx = np.argwhere(domain == -1)
-            plt.scatter(idx[:, 1], idx[:, 0], c='w')
+            idx = np.argwhere(distance_field == 0)+min_corner_field-min_corner
+            adjusted = start - min_corner
             temp = np.array(path)
             hi = np.array(krr)
             #plot_heatmap_3d(solved_domain, temp-min_corner)
@@ -187,12 +187,14 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
             N=1024,  # 1024 colors
         )
             from matplotlib.colors import PowerNorm
-
+            hi = solved_domain.copy()
             plt.imshow(
                 solved_domain,
                 cmap=cmap,
-                norm=PowerNorm(gamma=0.1)
+                norm=PowerNorm(gamma=0.15)
             )
+            plt.scatter(idx[:, 1], idx[:, 0], c='w')
+            plt.scatter(adjusted[1], adjusted[0], c='w')
             #plt.imshow(solved_domain, cmap=cmap)
             #plt.plot(*(hi-min_corner).T[::-1], 'w-')
             #plt.plot(*(temp-min_corner).T[::-1], 'r-')

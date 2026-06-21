@@ -22,7 +22,7 @@ from sampling import sample_ball
     if len(sampled_points)>0:
         start += estimate_gradient(sampled_points, sampled_vals, start, center_value=None, trim_bottom=0) * radius/10'''
 
-def estimate_gradient(center_point, domain, min_corner, dim, radius, n_walks, center_value=None, trim_bottom=0.0):
+def estimate_gradient(center_point, domain, min_corner, dim, radius, n_walks, center_value=None, trim_bottom=0.2):
     sampled_points = []
     sampled_vals = []
     for i in range(n_walks):
@@ -57,7 +57,7 @@ def estimate_gradient(center_point, domain, min_corner, dim, radius, n_walks, ce
         result = np.linalg.lstsq(A_aug, values, rcond=None)[0]
         gradient = result[:-1]
     if np.linalg.norm(gradient):
-        return center_point + gradient / np.linalg.norm(gradient)# * radius/5
+        return center_point + gradient / np.linalg.norm(gradient) * radius/2
     else:
         return center_point
 
