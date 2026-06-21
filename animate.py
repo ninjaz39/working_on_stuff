@@ -162,6 +162,114 @@ def animate_2d(
     pbar.close()
     plt.show()
 
+def animate_2d_graph(
+    heatmaps: list[np.ndarray],
+    min_corners: list,
+    paths: list,
+    idx: list,
+    fps: int = 100,
+    output_path: str = "2d.mp4",
+    reference: np.ndarray = None,  # true solution, same shape as heatmaps[-1]
+):
+    import imageio
+
+    has_ref = reference is not None
+
+    # --- precompute SSE per frame ---
+    if has_ref:
+        sse_values = []
+        
+        for frame in range(len(heatmaps)):
+            hi = np.full(heatmaps[-1].shape, np.nan)
+            rel_a = np.round(np.array(min_corners[frame]) - min_corners[-1]).astype(int)
+            slices_a = tuple(slice(int(rel_a[d]), int(rel_a[d]) + heatmaps[frame].shape[d]) for d in range(hi.ndim))
+            hi[slices_a] = heatmaps[frame]
+            hi[hi == -1] = np.nan
+
+            mask = ~np.isnan(hi) & ~np.isnan(reference)
+            sse = np.sum((hi[mask] - reference[mask]) ** 2)
+            sse_values.append(sse)
+        sse_values = np.array(sse_values)
+
+    # --- figure layout ---
+    if has_ref:
+        fig, (ax, ax_sse) = plt.subplots(1, 2, figsize=(12, 5))
+    else:
+        fig, ax = plt.subplots()
+
+    valid = np.all((idx >= 0) & (idx < np.array(heatmaps[-1].shape)), axis=1)
+    initial_hi = heatmaps[0]
+
+    vmin = np.nanmin([np.nanmin(h) for h in heatmaps])
+    vmax = np.nanmax([np.nanmax(h) for h in heatmaps])
+
+    im = ax.imshow(
+        initial_hi,
+        cmap='inferno',
+        animated=True,
+        extent=[0, initial_hi.shape[1], initial_hi.shape[0], 0],
+        origin='upper',
+        vmin=vmin,
+        vmax=vmax,  
+    )
+    plt.colorbar(im, ax=ax)
+    scatter = ax.scatter([], [], c='white', s=10)
+    line_object = ax.plot([], [], 'r-')[0]
+
+    # --- SSE plot setup ---
+    if has_ref:
+        y_min = sse_values.min()
+        y_max = sse_values.max()
+        padding = (y_max - y_min) * 0.05
+
+        ax_sse.set_xlim(0, len(heatmaps) - 1)
+        ax_sse.set_ylim(y_min - padding, y_max + padding)
+        ax_sse.set_xlabel('Frame')
+        ax_sse.set_ylabel('SSE')
+        ax_sse.set_title('Sum of Squared Error')
+        ax_sse.plot(np.arange(len(heatmaps)), sse_values, color='lightgray', linewidth=1, zorder=1)
+        sse_line, = ax_sse.plot([], [], color='royalblue', linewidth=2, zorder=2)
+        sse_dot,  = ax_sse.plot([], [], 'o', color='red', markersize=6, zorder=3)
+
+    def update(frame):
+        hi = np.full(heatmaps[-1].shape, np.nan)
+        rel_a = np.round(np.array(min_corners[frame]) - min_corners[-1]).astype(int)
+        slices_a = tuple(slice(int(rel_a[d]), int(rel_a[d]) + heatmaps[frame].shape[d]) for d in range(hi.ndim))
+
+        hi[slices_a] = heatmaps[frame]
+        hi[idx[valid, 0], idx[valid, 1]] = np.nan
+        hi[hi == -1] = np.nan
+
+        im.set_data(hi)
+        im.set_extent([0, hi.shape[1], hi.shape[0], 0])
+        ax.set_xlim(0, hi.shape[1])
+        ax.set_ylim(hi.shape[0], 0)
+        ax.set_title(f'Frame {frame + 1} / {len(heatmaps)}')
+
+        path = np.array(paths[: frame + 2]).copy() - min_corners[-1]
+        line_object.set_data(path[:, 1], path[:, 0])
+
+        if has_ref:
+            sse_line.set_data(np.arange(frame + 1), sse_values[:frame + 1])
+            sse_dot.set_data([frame], [sse_values[frame]])
+
+    # --- render ---
+    pbar = tqdm(total=len(heatmaps), desc='Rendering')
+    writer = imageio.get_writer(output_path, fps=fps)
+
+    for i in range(len(heatmaps)):
+        update(i)
+        fig.canvas.draw()
+        buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8)
+        buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+        buf = buf[:, :, 1:]  # ARGB → RGB
+        writer.append_data(buf)
+        pbar.update(1)
+
+    writer.close()
+    pbar.close()
+    plt.show()
+
 '''def animate_3d(
     heatmaps: list[np.ndarray],
     min_corners: list,

@@ -12,7 +12,7 @@ from tqdm import tqdm
 VIEW_RANGE = 100
 MOVEMENT_RANGE= 5
 EPSILON = 0.4999999
-AVOID = 5.0
+AVOID = 0.0
 def save_ndarray(array: np.ndarray, name: str) -> None:
     """
     Saves an n-dimensional numpy array to a file.
@@ -130,7 +130,7 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
     num_domain, min_corner = merge_domains_nd(num_domain, min_corner, new_min_corner, tuple([domain_size]*dim))
     for i in tqdm(range(1000)):
         solved_domain, start_1, krr, max_heat = ego_centric_wos_mapping(max_heat, krr, num_domain, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
-        if i % 100 == 0:
+        if i % 1000 == 0:
             idx = np.argwhere(distance_field == -1) +min_corner_field-min_corner
             
             #plot_heatmap_3d(solved_domain, temp-min_corner)
@@ -140,7 +140,7 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
     
 
     #path.append(goal)
-    save_ndarray(domain/num_domain, 'ref_data')
+    save_ndarray(domain/num_domain, 'ref_data_1')
     return 0
 
 '''start = np.array([450, 443, 450.0])
@@ -150,9 +150,9 @@ dim = len(start)
 distance_field = load_ndarray('/Users/TWengChu/Desktop/wos_v2/obstacles_3d')
 '''
 start = np.array([250.0, 450.0])
-goal = np.array([250.0, 699.0])
+goal = np.array([250.0, 600.0])
 dim = len(start)
-distance_field = load_ndarray('/Users/TWengChu/Desktop/wos_v2/obstacle_fields/smaller_box_2d')
+distance_field = load_ndarray(r'C:\Users\chuen\Desktop\working_on_stuff\obstacle_fields\smaller_box_2d')
 min_corner_field = np.array([0,200])
 
 heatmaps = path_mapping(start, goal, distance_field, min_corner_field, n_walks=10)

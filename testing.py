@@ -4,14 +4,14 @@ from sampling import sample_sphere, sample_ball
 from helper import merge_domains_nd, update_neighbors, get_neighbors, dist_to_edge, get_average_heat, dist_to_obstacle
 from shapes import EgoSphere
 from path import filter_paths, check_path, check_intercept, estimate_gradient
-from animate import animate_2d, animate_3d
+from animate import animate_2d, animate_3d, animate_2d_graph
 from matplotlib.colors import LinearSegmentedColormap
 
 
 VIEW_RANGE = 100
 MOVEMENT_RANGE= 5
 EPSILON = 0.4999999
-AVOID = 5.0
+AVOID = 0.0
 
 def load_ndarray(name: str) -> np.ndarray:
     """Companion loader that reconstructs the array from the saved file."""
@@ -23,7 +23,7 @@ def load_ndarray(name: str) -> np.ndarray:
     return np.array(flat).reshape(shape)
 
 def wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, start, overall_domain, min_corner, curr_rec):
-    if curr_rec == 600:
+    if curr_rec == 50:
         return 0, []
     adjusted_start = start-min_corner
     dist_g = np.linalg.norm(start-goal)
@@ -66,9 +66,9 @@ def wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, st
 def WoS_altered_g(max_heat, distance_field, min_corner_field, goal, start, radius, n_walks, overall_domain, min_corner):
     dim = len(start)
     final_path = []
-    radius_g = distance_field[tuple(np.round(goal-min_corner_field).astype(int))]
+    radius_g = distance_field[tuple(np.round(goal-min_corner_field).astype(int))]/2
     for walk in range(n_walks):
-        first_step = sample_ball(dim, 200, start)
+        first_step = sample_ball(dim, 100, start)
         heat, path = wos_walk_altered_g(radius_g, dim, distance_field, min_corner_field, goal, first_step, overall_domain, min_corner, 0)
         if len(path)>0:
             if heat > max_heat:
@@ -126,14 +126,15 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
     domain_size = VIEW_RANGE * 2 + 1
     count = 0
     max_heat = 0
+    new_min_corner = start - np.array([VIEW_RANGE]*dim)
+    domain, min_corner = merge_domains_nd(domain, min_corner, new_min_corner, tuple([domain_size]*dim))
 
     while dist_g>5:#distance_field[tuple(np.round(goal-min_corner_field).astype(int))]:
-        '''if count == 1000:
-            break'''
+        if count == 1000:
+            break
         print(start)
         count+=1
-        new_min_corner = start - np.array([VIEW_RANGE]*dim)
-        domain, min_corner = merge_domains_nd(domain, min_corner, new_min_corner, tuple([domain_size]*dim))
+        
 
         solved_domain, start_, krr, max_heat = ego_centric_wos_mapping(max_heat, krr, domain, min_corner, start, goal, distance_field, min_corner_field, direction, n_walks)
         if type(start) == type(None):
@@ -141,45 +142,47 @@ def path_mapping(start, goal, distance_field, min_corner_field, direction=None, 
             krr = [path[-2]]
         path.append(start.copy())
         dist_g = np.linalg.norm(start-goal)
-        '''if count % 1000 == 0:
+        if count % 500 == 0:
             idx = np.argwhere(domain == -1)
             plt.scatter(idx[:, 1], idx[:, 0], c='w')
-            temp = np.array(path)
-            hi = np.array(krr)
             #plot_heatmap_3d(solved_domain, temp-min_corner)
             plt.imshow(solved_domain, cmap='inferno')
-            plt.plot(*(hi-min_corner).T[::-1], 'w-')
-            plt.plot(*(temp-min_corner).T[::-1], 'r-')
             plt.show()
-            (block=False)
-            plt.pause(0.001)
-            plt.close()'''
 
         
-        heatmaps.append(solved_domain)
+        heatmaps.append(solved_domain.copy())
         min_corners.append(min_corner)
 
     #path.append(goal)
 
     return heatmaps, path, min_corners
 
-start = np.array([450, 443, 450.0])
+'''start = np.array([450, 443, 450.0])
 min_corner_field = np.array([350, 400, 400])
 goal = np.array([450, 550, 450.0])
 dim = len(start)
-distance_field = load_ndarray('/Users/TWengChu/Desktop/wos_v2/obstacles_3d')
-'''start = np.array([250.0, 450.0])
-goal = np.array([250.0, 699.0])
+distance_field = load_ndarray('/Users/TWengChu/Desktop/wos_v2/obstacles_3d')'''
+start = np.array([250.0, 450.0])
+goal = np.array([250.0, 600.0])
 dim = len(start)
-distance_field = load_ndarray('/Users/TWengChu/Desktop/wos_v2/obstacle_fields/smaller_box_2d')
-min_corner_field = np.array([0,200])'''
+distance_field = load_ndarray(r'C:\Users\chuen\Desktop\working_on_stuff\obstacle_fields\smaller_box_2d')
+min_corner_field = np.array([0,200])
 
 heatmaps, paths, min_corners = path_mapping(start, goal, distance_field, min_corner_field, n_walks=10)
 idx = (np.argwhere(distance_field <= 0) + min_corner_field - min_corners[-1]).astype(int) 
-animate_3d(
+'''animate_2d(
     heatmaps,
     min_corners,
     paths,
     idx,
     fps=50,
-    output_path = "ak.mp4",)
+    output_path = "ak.mp4",)'''
+
+animate_2d_graph(
+    heatmaps,
+    min_corners,
+    paths,
+    idx,
+    fps=50,
+    output_path = "graph.mp4",
+    reference = (load_ndarray(r'C:\Users\chuen\Desktop\working_on_stuff\ref_data_1')).reshape(201,201))
