@@ -1,5 +1,6 @@
 obstacle_fields/moving_rectangle 
 obstacle_fields/obstacles_3d 
+obstacles_4d
 __pycache__/
 *.pyc
 *.pyo
